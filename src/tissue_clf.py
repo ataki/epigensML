@@ -36,7 +36,7 @@ from matplotlib import pyplot as plt
 
 FEATURE_SELECTION = False
 
-FOLD_CV = False
+FOLD_CV = True
 
 PLOT_RESULTS = not FOLD_CV
 
@@ -45,7 +45,7 @@ NORMALIZE = True
 GLOBAL_K = 6
 
 
-tissues = ["limb", "brain"]
+tissues = ["limb", "heart"]
 
 
 def filter_one_v_all(d):
@@ -60,9 +60,9 @@ def filter_one_v_all(d):
 def filter_one_v_one(d):
     """ Filter for one-v-one: ex where only one
     is found, (not both and not neither) """
-    fn = lambda tissue: any(tissue in x for raw in d.split("|")[4:]),
+    fn = lambda tissue: any(tissue in raw for raw in d.split("|")[4:])
     result = map(fn, tissues)
-    return len([x for x in result if x]) == 1
+    return len([x for x in result if x is True]) == 1
 
 
 def one_v_all(d):
@@ -109,18 +109,18 @@ if __name__ == "__main__":
 
     pos_dataset = args.pos_exs
     heart_feats = None
-    liver_feats = None
+    limb_feats = None
     brain_feats = None
 
-    if hasattr(args, "heart"):
-        heart_feats = np.load(args.heart_mnemonic)
-    if hasattr(args, "limb"):
-        limb_feats = np.load(args.limb_mnemonic)
-    if hasattr(args, "brain"):
-        brain_feats = np.load(args.brain_mnemonic)
+    if args.heart:
+        heart_feats = np.load(args.heart)
+    if args.limb:
+        limb_feats = np.load(args.limb)
+    if args.brain:
+        brain_feats = np.load(args.brain)
 
-    examples, labels, descriptions = parse_fa_tissue(
-        pos_dataset, one_v_one, filter_fn
+    examples, labels, kept_rows = parse_fa_tissue(
+        pos_dataset, one_v_one, filter_one_v_one
     )
 
     # feature vector index :=> kmer string
@@ -128,26 +128,34 @@ if __name__ == "__main__":
 
     # feature matrix and label vector
     X, y = get_XY(examples, labels, kmers_index)
+    print X.shape
 
     # scale raw counts
     if NORMALIZE:
         X = normalize(X, axis=1, norm='l1')
 
+    print "Tissues: ", str(tissues)
+
     # Add extra features
-    if "heart" in tissues and heart_feats:
-        X = np.hstack((X, heart_feats))
-    if "limb" in tissues and limb_feats:
-        X = np.hstack((X, limb_feats))
-    if "brain" in tissues and brain_feats:
-        X = np.hstack((X, brain_feats))
+    if "heart" in tissues and heart_feats is not None:
+        feats= heart_feats[kept_rows, :]
+        X = np.hstack((X, feats))
+    if "limb" in tissues and limb_feats is not None:
+        feats = limb_feats[kept_rows, :]
+        X = np.hstack((X, feats))
+    if "brain" in tissues and brain_feats is not None:
+        feats = brain_feats[kept_rows, :]
+        X = np.hstack((X, feats))
+    print X.shape
 
     # Add e-box and taat core cols
     # ebox_col = get_ebox_col(examples)
     # taat_col = get_taat_col(examples)
     # X = np.hstack((X, taat_col))
 
-    clf = svm.SVC(kernel='linear')
-    # clf = OneVsRestClassifier(svc)
+    # clf = svm.SVC(kernel='linear')
+    svc = svm.SVC(kernel='rbf')
+    clf = OneVsRestClassifier(svc)
 
     if FEATURE_SELECTION:
         print "Feature selecting top 10 features"
@@ -170,7 +178,16 @@ if __name__ == "__main__":
 
         print "Plotting results"
         y_scores = clf.decision_function(X_test)
-        plot_roc(y_test, y_scores, "ROC Tissue", out="figures/roc-curve-tis-limb-v-brain.png")
+
+        tname = "-".join(tissues)
+        is_extra = brain_feats is not None or limb_feats is not None or heart_feats is not None
+
+        plot_roc(
+            y_test,
+            y_scores,
+            "ROC Tissue",
+            out="figures/roc-curve-tis-%s%s.png" % (tname, is_extra)
+        )
         # plot_precision_recall(y_true, y_scores)
         # plot_2d_results(X_test, y_test, clf.predict(X_test))
         print "Done plotting"

@@ -18,6 +18,13 @@ immune to kernel choice, which indicated linear separability across a
 high dimensional dataset (feature space of all possible kmers in regions of
 interest).
 
+## What's in Here
+
+- `tasks` folder contains main prediction scripts.
+- `src` folder contains python code for classifiers
+- `scripts` folder contains data extraction code
+- `requirements.txt` describes all our project dependencies, sans bedtools.
+
 ## Description of Data
 
 Mostly for reference.
@@ -27,36 +34,40 @@ Mostly for reference.
 - Beer Labs Dataset. Obtained >.90 clf accuracy for some pos/neg enhancer regions.
   Useful for testing that our models aren't too far off.
 
-## Milestone
+## Tasks
 
-For the milestone, we have completed the current checklist:
+1. Predict general enhancer activity
+2. Predict enhancer activity for tissue type.
+3. Predict enhancer activity for parts of tissue.
 
-- [x] Process Human FASTA data
-- [x] Generate kmer count feature vector
-- [x] Train SVM with default RBF kernel
-- [x] Generate additional features from Lee et al paper
-- [x] Generate point scatter plot using PCA of top features (like Fig 1 of Lee
-  et al)
-- [x] Generate precision/recall/false-positive curves (like Fig 2)
-- [x] K-fold cross validation using sklearn
+## Techniques
 
-## Notes on Results
+We used an SVM because
 
-Initial results (sklearn's cv train/test split). Normalizing vector counts 
-help to keep the average accuracy at >0.6.
+- theoretical guarantees against overfitting
+- historically proven model
+- does well for small datasets
 
-- accuracy = ~0.61 (no feature sel, linear svm, 6mer features)
-- roc = 0.65
+Our evaluation metric was au-ROC, which gives the probability that a randomly
+chosen positive example ranks higher than a randomly chosen negative example.
 
-VISTA only predicts enhancers at 11.5 days(? wks) after birth. They say
-that enhancer activity can still be present at a later stage in development,
-i.e. our "pos" labels for enhancer activity is only good for a snapshot at 
-11.5 days and is not predictive of enhancer activity in general.
+We used one-vs-one to break up multi-class classification problems. For
+multi-label prediction tasks, we used one-vs-rest.
 
-Using E-box and TAAT-cores didn't help. Will need to do some more hacking
-on these features to see if they can be combined to be useful.
+In addition to kmer counts, we boosted Task 1 by adding indicator features
+from ultra-conserved TF binding sites, and Task 2 / 3 by adding indicator features
+from epigenetic regional data.
 
-## Final
+## Findings
 
-TODO: Add descriptions of features used for various prediction tasks.
+First, we ran our dataset with the fasta files provided by Beer Labs and
+obtained an average 5-fold cv score of about 0.82 for au-ROC.
+
+We then ran on our own Vista Dataset and obtained around 0.85 with
+count normalization for Task 1. For Task 2, our results ranged from 0.5 to
+0.79. For task 3, the average au-ROC was 0.55.
+
+Adding ultra-conserved indicator features boosted Task 1 to 0.88.
+Adding epigenetic features boosted Task 2's average to around 0.82, and 0.77
+for Task 3.
 

@@ -63,14 +63,14 @@ if __name__ == "__main__":
     labels = []
 
     for x in seqfile:
-        label = np.zeros(3)
         if op == "tf":
+            label = np.zeros(3, dtype=np.int32)
             key = hack_key(description_to_bed(x.description))
             if key in tfdict:
                 label = extract_feat_tf(tfdict[key])
-                print "Found key"
         else:
             # annotated fasta file, so can use seq_to_bed
+            label = np.zeros(4, dtype=np.int32)
             if op in x.description:
                 key = hack_key(seq_to_bed(x.description))
                 if key in tfdict:

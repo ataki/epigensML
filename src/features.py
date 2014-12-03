@@ -8,7 +8,7 @@ import itertools
 import pybedtools
 from Bio import SeqIO
 
-GLOBAL_K = 5
+GLOBAL_K = 6
 
 brain_seqFile = None
 heart_seqFile = None
@@ -111,15 +111,20 @@ def parse_fa_tissue(path, label_fn, filter_fn):
 
     seqs = []
     labels = []
+    kept_rows = []
 
+    idx = 0
     for entry in human_fasta_seq:
         if filter_fn(entry.description):
             seqs.append(str(entry.seq).replace("n", "").lower())
             labels.append(label_fn(entry.description))
+            kept_rows.append(idx)
+        idx += 1
 
     seqs = np.array(seqs)
     labels = np.array(labels)
-    return (seqs, labels)
+    kept_rows = np.array(kept_rows)
+    return (seqs, labels, kept_rows)
 
 
 def parse_fa_fine_grain(path, label_fn, filter_fn):
@@ -136,15 +141,20 @@ def parse_fa_fine_grain(path, label_fn, filter_fn):
     human_fasta_seq = SeqIO.parse(fasta_file, 'fasta')
     seqs = []
     labels = []
+    kept_rows = []
 
+    idx = 0
     for entry in human_fasta_seq:
         if filter_fn(entry.description):
             seqs.append(str(entry.seq).replace("n", "").lower())
             labels.append(label_fn(entry.description))
+            kept_rows.append(idx)
+        idx += 1
 
     seqs = np.array(seqs)
     labels = np.array(labels)
-    return (seqs, labels)
+    kept_rows = np.array(kept_rows)
+    return (seqs, labels, kept_rows)
 
 
 def get_kmer_counts(seq, ref):
@@ -198,7 +208,7 @@ def get_XY(examples, labels, kmer_index):
     print "num labels (y): ", len(y)
     if len(labels.shape) == 1:
         print "+ ", len(np.where(y == 1)[0])
-        print "- ", len(np.where(y == -1)[0])
+        print "- ", len(np.where(y != 1)[0])
     print "------------------------------------"
     return (X, y)
 
@@ -231,7 +241,7 @@ def seq_to_bed(description):
     return bedLine
 
 
-def extract_feat_tf(annotations, converted=False):
+def extract_feat_tf(annotations):
     """ Given a bedtools line representing a sequence,
     returns row of general enhancer features """
     joint = "".join(annotations)
@@ -240,10 +250,10 @@ def extract_feat_tf(annotations, converted=False):
         ('TCF' in joint),
         ('TBF' in joint)
     ]
-    return np.array(features)
+    return np.array(features, dtype=np.int32)
 
 
-def extract_feat_nontf(annotations, bedfile):
+def extract_feat_nontf(annotations):
     """ Given single sequence that's labeled with
     a part of the brain, returns a list of additional
     epigenetic features """
@@ -254,4 +264,4 @@ def extract_feat_nontf(annotations, bedfile):
         ('Het' in joint),
         ('TxWk' in joint)
     ]
-    return np.array(features)
+    return np.array(features, dtype=np.int32)

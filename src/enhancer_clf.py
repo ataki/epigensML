@@ -38,11 +38,11 @@ from matplotlib import pyplot as plt
 
 FEATURE_SELECTION = False
 
-FOLD_CV = True
+FOLD_CV = False
 
 PLOT_RESULTS = not FOLD_CV
 
-EXTRA = False
+EXTRA = True
 
 NORMALIZE = True
 
@@ -58,8 +58,8 @@ if __name__ == "__main__":
 
     pos_dataset = args.pos_exs
     neg_dataset = args.neg_exs
-    pos_tf = args.pos_tf if hasattr(args, "pos_tf") else None
-    neg_tf = args.neg_tf if hasattr(args, "neg_tf") else None
+    pos_tf = args.pos_tf if args.pos_tf else None
+    neg_tf = args.neg_tf if args.neg_tf else None
 
     pos_seq, pos_labels = parse_fa(pos_dataset, 1)
     neg_seq, neg_labels = parse_fa(neg_dataset, -1)
@@ -70,6 +70,7 @@ if __name__ == "__main__":
     examples = np.concatenate((pos_seq, neg_seq))
     labels = np.concatenate((pos_labels, neg_labels))
     extra_feats = np.concatenate((pos_extra, neg_extra)) if pos_extra is not None and neg_extra is not None else None
+    extra_feats = extra_feats[:, 0:2]
 
     # feature vector index :=> kmer string
     kmers_index = get_kmers_index_lookup()

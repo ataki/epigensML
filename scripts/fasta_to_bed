@@ -3,11 +3,18 @@
 import csv
 import os
 from Bio import SeqIO
+import sys
 
 
 if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print """
+            Usage: ./fasta_to_bed <dir>
+                where dir is folder with fasta files
+                which need converting """
+    path = sys.argv[1]
     rowcount = 0
-    for fpath in os.listdir("fasta"):
+    for fpath in os.listdir(path):
         if fpath.endswith(".fa"):
             fname, ext = fpath.split(".")
             bedfile = "bed/%s.bed" % fname

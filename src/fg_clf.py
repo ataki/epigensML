@@ -1,20 +1,15 @@
 """
 Given an annotated fasta file of brain enhancer sequences,
 trains and evaluates a classifier to distinguish among
-different locations of the brain. 
+different locations of the brain.
 
-Classifiers used are one-vs-one to distinguish btwn 
+Classifiers used are one-vs-one to distinguish btwn
 two tissues, and one-vs-all for the rest.
 """
 
 # Imports for IPython
-import re
-import pdb
-import itertools
 import argparse
-import collections
 import numpy as np
-from Bio import SeqIO
 
 # make util functions available
 from features import *
@@ -22,17 +17,12 @@ from plot import *
 
 # Script imports
 from sklearn import svm
-from sklearn import ensemble
 from sklearn import cross_validation as cv
-from sklearn.metrics import roc_curve, auc, precision_recall_curve
 from sklearn.preprocessing import label_binarize
 from sklearn.preprocessing import normalize
-from sklearn.decomposition import PCA
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.feature_selection import SelectKBest
 from sklearn.feature_selection import chi2
-
-from matplotlib import pyplot as plt
 
 FEATURE_SELECTION = False
 
@@ -45,30 +35,27 @@ NORMALIZE = True
 GLOBAL_K = 6
 
 
-brain_parts = ["forebrain", "midbrain", "hindbrain"]
-
-
-def filter_seq(d):
-    """ Filters sequences by certain brain parts """
-    for raw in description.split("|")[4:]:
-        for part in brain_parts:
-            if part in raw:
-                return True
+def filter_one_v_all(description):
+    """ Filters descriptions for those that have
+    the necessary parts """
+    brain_parts = ["forebrain", "midbrain", "hindbrain"]
+    for part in brain_parts:
+        if part in description:
+            return True
     return False
 
 
-def one_v_one(d):
+def filter_binary(description):
+    return "brain" in description
+
+
+def one_v_one(description):
     """ Treats the first two entries in brain-parts
     as the labels for a one-v-one clf """
-    for raw in d.split("|")[4:]:
-        if brain_parts[0] in raw:
-            return 1
-        elif brain_parts[1] in raw:
-            return -1
-    raise Exception("Shouldn't have more than two classes here")
+    return "forebrain" in description
 
 
-def one_v_all(d):
+def one_v_all(description):
     """ converts descriptions to multi-label
     brain label.
     Indices in label correspond to:
@@ -88,16 +75,28 @@ def one_v_all(d):
     return label
 
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("pos_exs", help="path to pos examples")
-    parser.add_argument("neg_exs", help="path to neg examples", default=None)
+    parser.add_argument("--forebrain", help="path to forebrain npy file")
+    parser.add_argument("--prediction_type", help="binary or multilabel", default="multilabel")
+    args = parser.parse_args()
 
     pos_dataset = args.pos_exs
-    neg_dataset = args.neg_exs
+    prediction_type = args.prediction_type
+    forebrain_feats = None
 
-    examples, labels = parse_fa_fine_grain(pos_dataset, fg_label_fn, filter_seq)
+    if prediction_type == "multilabel":
+        examples, labels, kept_rows = parse_fa_fine_grain(
+            pos_dataset, one_v_all, filter_one_v_all
+        )
+    else:
+        examples, labels, kept_rows = parse_fa_fine_grain(
+            pos_dataset, one_v_one, filter_binary
+        )
+
+    if args.forebrain:
+        forebrain_feats = np.load(args.forebrain)
 
     # feature vector index :=> kmer string
     kmers_index = get_kmers_index_lookup()
@@ -111,11 +110,17 @@ if __name__ == "__main__":
 
     # Add e-box and taat core cols
     # ebox_col = get_ebox_col(examples)
-    taat_col = get_taat_col(examples)
-    X = np.hstack((X, taat_col))
+    # taat_col = get_taat_col(examples)
+    # X = np.hstack((X, taat_col))
+
+    # == Extra features ==
+    if forebrain_feats is not None:
+        feats = forebrain_feats[kept_rows, :]
+        X = np.hstack((X, feats))
 
     clf = None
-    if prediction_type != "enhancer":
+
+    if prediction_type == "multilabel":
         svc = svm.SVC(kernel='rbf')
         clf = OneVsRestClassifier(svc)
     else:
@@ -127,30 +132,8 @@ if __name__ == "__main__":
         # K-best features
         X = SelectKBest(chi2, k=10).fit_transform(X, y)
 
-    if FOLD_CV:
-        print "Performing 5-fold cv"
-        scores = cv.cross_val_score(
-            clf, X, y, cv=5, scoring="roc_auc"
-        )
-        print "%d-fold cv, average auRoc %f" % (len(scores), scores.mean())
-
-    if SPLIT_CV:
-        print "Performing train/test split cv"
-        X_train, X_test, y_train, y_test = cv.train_test_split(
-            X, y, test_size=0.3, random_state=0
-        )
-        clf.fit(X_train, y_train)
-
-        if PLOT_RESULTS:
-            print "Plotting results"
-            # transform labels from [-1,1] to [0,1]
-            if prediction_type == "enhancer":
-                y_true = label_binarize(y_test, classes=[-1, 1])
-            else:
-                y_true = y_test
-
-            y_scores = clf.decision_function(X_test)
-
-            plot_roc(y_true, y_scores, prediction_type)
-            # plot_precision_recall(y_true, y_scores)
-            # plot_2d_results(X_test, y_test, clf.predict(X_test))
+    print "Performing 5-fold cv"
+    scores = cv.cross_val_score(
+        clf, X, y, cv=5, scoring="roc_auc"
+    )
+    print "%d-fold cv, average auRoc %f" % (len(scores), scores.mean())
